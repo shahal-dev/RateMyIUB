@@ -1,0 +1,249 @@
+PROJECT NAME: RateMyIUB — Peer-powered professor & course ratings for Independent University, Bangladesh
+
+GOAL
+Build a modern, secure, and scalable web app where IUB students can rate professors and courses, leave structured feedback, view charts/analytics, and filter by department, course, semester, and tags. The platform must protect student anonymity, support Bangla + English, and include strong moderation to comply with Bangladesh defamation/privacy norms. Mobile-first, super fast, and delightful.
+
+AUDIENCE & CONTEXT
+- Users: IUB students (current or recent alumni) and faculty (read-only + right-of-reply).
+- Location/timezone: Bangladesh, Asia/Dhaka (BST).
+- Languages: English (default) and Bangla (bn).
+- University email domain for verification: @iub.edu.bd
+- Cultural/legal: Include clear Community Guidelines, anti-harassment/defamation policy, moderation & takedown workflow.
+
+TECH STACK (monorepo)
+- Frontend: React + TypeScript + Vite + Tailwind CSS (or shadcn/ui). Client-side routing with React Router. i18n (react-i18next).
+- Charts: Chart.js (radar, line, bar, histogram). Word cloud via a lightweight lib or canvas.
+- Backend: Node.js + Express + TypeScript. REST APIs + WebSocket for live updates.
+- DB: PostgreSQL (Neon or standard Postgres) + Drizzle ORM (type-safe schema + migrations).
+- Cache / rate limit: Redis (Upstash or standard).
+- Email: Resend/Mailgun for magic-link/OTP auth (restrict to @iub.edu.bd).
+- Search: Postgres full‑text (tsvector + GIN) or Meilisearch (optional).
+- Storage: No user-uploaded images initially (to reduce privacy risk). Static assets via CDN.
+- Observability: Sentry for errors, PostHog for product analytics.
+- Testing: Vitest + Supertest (API), Playwright (E2E).
+- Deployment: Frontend (Vercel/Netlify), Backend (Fly.io/Render), DB (Neon), Redis (Upstash). CI via GitHub Actions.
+
+KEY PRODUCT FEATURES
+1) Browse & Search
+   - Explore by Department, Course, Professor.
+   - Powerful filters: department, course code, semester, rating range, tags (e.g., “Tough Exams”, “Lenient Grader”, “Heavy Projects”, “Interactive”, “Attendance Strict”, “Project-based”).
+   - Sort: Highest rated, Most rated, Most helpful, Trending, Most improved (QoQ/YoY).
+
+2) Professor Profile
+   - Header: Name, Department(s), courses taught, total reviews, verified-badge if faculty claimed profile.
+   - Scorecards: Overall score, % “Would take again”, % “Recommend”, sample size.
+   - Charts:
+     • Radar: Clarity, Engagement, Fairness, Grading, Workload (higher = heavier), Difficulty (higher = tougher).
+     • Line chart: Score trends by semester.
+     • Histograms: Distribution of overall ratings & workload.
+     • Tag frequency bar chart.
+     • (Optional) word cloud from comments.
+   - Review feed: Pinned helpful reviews, infinite scroll, “Helpful / Not helpful” voting, Report button.
+
+3) Course Page
+   - Shows aggregated ratings across instructors teaching that course.
+   - Compare instructors (side-by-side mini radar + bar charts).
+   - Filters: specific instructor, semester, section.
+
+4) Write a Review (structured + comment)
+   - Auth required via @iub.edu.bd; display pseudonym only (anonymity by default).
+   - One review per user per {course, section, semester, professor}. Edits allowed for 24 hours; then locked.
+   - Fields:
+     • Overall rating (1–5), Clarity (1–5), Engagement (1–5), Fairness (1–5), Grading (1–5), Workload (1–5), Difficulty (1–5)
+     • Would take again? (Yes/No)
+     • Recommend? (Yes/No)
+     • Delivery: In-person / Online / Hybrid
+     • Attendance mandatory? (Yes/No)
+     • Grade received: A/B/C/D/F/Withdrew/Not yet
+     • Hours per week (numeric)
+     • Tags (multi-select from controlled vocabulary)
+     • Semester & year (e.g., Spring 2025), Course code (e.g., CSE101), Section (e.g., 02)
+     • Free-text comment (50–600 chars) with profanity/PII/harassment filter
+   - Live preview and guideline reminders.
+
+5) Faculty Experience
+   - Faculty can claim profile via @iub.edu.bd (separate role). Read-only analytics + “Right of Reply” to a review (1 reply per review). Cannot alter ratings.
+   - Request moderation for privacy violations.
+
+6) Moderation, Trust & Safety (Bangladesh-aware)
+   - Auto-moderation pipeline: profanity/harassment list, personal data redaction (phone, email, ID), defamation-risk keywords, name-doxxing checks.
+   - ML/NLP (simple): sentiment score, topic tags, toxicity score. Flag high-risk to human queue.
+   - Report/flag system: triage dashboard, audit logs, soft delete, takedown workflow.
+   - Community Guidelines + Legal/Privacy pages: emphasize opinions-only, no personal attacks, no false allegations.
+   - Rate limiting & anti-brigading: per-IP/user burst limits, cool-down between multiple reviews for same entity.
+
+7) Scoring & Ranking (avoid small-sample bias)
+   - Display Overall using a Bayesian average with a Wilson lower bound for “Would take again”/“Recommend”.
+   - Show sample size and confidence UI (e.g., “n=37; CI: ±0.18”).
+   - “Trending” uses time-decayed weighting (recent semesters > older).
+
+8) Internationalization & Accessibility
+   - Full i18n (en, bn). Toggle language; default en.
+   - RTL-safe components (Bangla rendering), WCAG 2.1 AA, keyboard nav, semantic landmarks.
+
+9) Performance / UX
+   - Mobile-first responsive design, skeleton loaders, optimistic UI for votes.
+   - Pagination + infinite scroll, server pagination on API.
+   - Caching (HTTP + Redis), ETags/304.
+
+10) Admin Dashboard
+   - Review queue (flags, toxicity score, reasons), approve/reject, redact PII.
+   - Manage departments/courses/professors, merge duplicates.
+   - Metrics: DAU/MAU, submission rates, moderation SLAs, top flagged terms.
+
+DATA MODEL (Drizzle ORM — Postgres)
+- users
+  id (uuid pk), email (unique), role ('student'|'faculty'|'admin'), display_name, avatar_url (optional), created_at, updated_at, last_login_at, is_verified (boolean), university_id_hash (for internal identity; never shown)
+- departments
+  id (uuid pk), code (text unique), name_en, name_bn
+- courses
+  id, department_id (fk), code (e.g., CSE101), title_en, title_bn, credits (numeric), active (bool)
+- professors
+  id, full_name, slug, departments (jsonb string[]), bio (text), claimed_by_user_id (fk nullable)
+- offerings (course sections)
+  id, course_id (fk), professor_id (fk), semester ('Spring'|'Summer'|'Autumn'|'Fall'|'Winter'), year (int), section (text)
+- reviews
+  id, user_id (fk), professor_id (fk), course_id (fk), offering_id (fk nullable),
+  semester, year, section,
+  overall (int 1–5),
+  clarity, engagement, fairness, grading, workload, difficulty (ints 1–5),
+  would_take_again (bool), recommend (bool),
+  delivery ('in_person'|'online'|'hybrid'),
+  attendance_mandatory (bool),
+  grade_received ('A'|'B'|'C'|'D'|'F'|'W'|'NA'),
+  hours_per_week (int),
+  tags (text[] from controlled list),
+  comment (text),
+  sentiment (float -1..1),
+  toxicity_score (float 0..1),
+  status ('published'|'pending'|'rejected'|'removed'),
+  helpful_count (int default 0), not_helpful_count (int default 0),
+  reports_count (int default 0),
+  created_at, updated_at, edited_until (timestamp)
+  UNIQUE(user_id, professor_id, course_id, semester, year, section)
+- review_votes
+  id, review_id (fk), user_id (fk), vote ('helpful'|'not_helpful'), UNIQUE(user_id, review_id)
+- reports
+  id, review_id (fk), reporter_user_id (fk), reason ('harassment'|'privacy'|'spam'|'inaccurate'|'other'), note (text), created_at
+- auth_logs, moderation_logs (id, actor_user_id, action, meta jsonb, created_at)
+
+CONTROLLED TAGS (examples)
+["Tough Exams","Lenient Grader","Heavy Projects","Light Workload","Interactive","Attendance Strict","Slides Heavy","Research Oriented","Practical Labs","Group Work","Theory Focused","Curve Grading","Pop Quizzes","Recorded Lectures"]
+
+BUSINESS RULES
+- Only @iub.edu.bd emails allowed for student accounts; pseudonymous by default (display_name auto generates like “IUB‑Student‑7b2”).
+- One review per {course, section, semester, professor}. Edits allowed for 24h.
+- Comments 50–600 chars; profanity/PII filter; block mentions of other students’ names/contact details.
+- Faculty reply: 1 reply per review, max 600 chars, must follow guidelines.
+- If offering_id is unknown, still allow review but link by (course, prof, semester).
+- Show “n” next to all averages; hide charts if n < 3 to prevent deanonymization.
+- Timezone: Asia/Dhaka for timestamps; localize dates.
+
+SCORING FORMULAS (implement in backend)
+- Bayesian mean for overall:
+  prior_mean = 3.7, prior_weight = 8
+  bayesian_overall = (prior_mean*prior_weight + sum(overall)) / (prior_weight + n)
+- Wilson lower bound (for yes/no like “Would take again”):
+  function wilson_lower_bound(pos, n, z=1.96):
+    if n==0 return 0
+    phat = pos/n
+    return (phat + z*z/(2n) - z*sqrt((phat*(1-phat)+z*z/(4n))/n)) / (1 + z*z/n)
+
+API DESIGN (REST; JSON)
+- Auth
+  POST /auth/magic-link {email} -> email link (restrict domain)
+  POST /auth/verify {token} -> session cookie (HttpOnly, SameSite=Lax)
+  POST /auth/logout
+- Users
+  GET /me
+  PATCH /me {display_name}
+- Catalog
+  GET /departments
+  GET /courses?dept&query&page
+  GET /professors?dept&query&page
+  GET /professors/:id
+  GET /courses/:id
+  GET /courses/:id/offerings?year&semester
+- Reviews
+  GET /professors/:id/reviews?semester&year&rating_min&tags&page&sort
+  GET /courses/:id/reviews?filters…
+  POST /reviews {payload as schema above}
+  PATCH /reviews/:id (only within 24h)
+  POST /reviews/:id/vote {vote:'helpful'|'not_helpful'}
+  POST /reviews/:id/report {reason,note}
+- Faculty
+  POST /faculty/claim {professor_id} (requires @iub.edu.bd)
+  POST /reviews/:id/reply {text}
+- Admin/Moderation
+  GET /admin/reviews?status=pending
+  POST /admin/reviews/:id/approve|reject|remove
+  GET /admin/merge?entity=professor|course (tools to merge duplicates)
+  GET /admin/metrics (basic stats)
+- WebSocket channels
+  ws://.../live/reviews?professor_id=… (push new reviews/replies)
+  ws://.../live/votes?review_id=…
+
+FRONTEND PAGES & UX
+- Home: search bar, department grid, “trending professors”, “most helpful this week”.
+- Departments: list with counts; click-through.
+- Professor page: header + scorecards + charts + filters + review feed + write-review CTA.
+- Course page: aggregated charts + instructor comparison + review feed.
+- Write Review: structured form with live preview, guideline reminders.
+- Auth pages: email magic link flow; “Check your IUB email”.
+- Faculty portal: claim profile, view analytics, reply to reviews.
+- Admin dashboard: moderation queue, entity management, metrics.
+- Static pages: About, Community Guidelines, Terms, Privacy, Contact.
+
+UI/STYLE GUIDELINES
+- Clean, modern, accessible. Tailwind + shadcn/ui components.
+- Friendly empty states, skeleton loaders, optimistic vote updates.
+- Use intuitive icons; clear labels for “Workload” vs “Difficulty”.
+- Bilingual UI text; include bn translations for main UI strings.
+
+MODERATION PIPELINE (implement minimally first)
+- On submit: run profanity list, PII regex (emails, phone, NID-like patterns), harassment keywords -> if flagged, status=pending; else publish.
+- Simple sentiment/toxicity (rule-based with word lists) -> score stored; high score auto-pending.
+- Reported content -> moves to queue; moderators can redact or remove with reason.
+- Keep audit logs.
+
+SEED DATA
+- Departments: create a few IUB-typical departments (e.g., CSE, EEE, BBA, Pharmacy, Environmental Science, Media & Communication) with English/Bangla names.
+- Courses: 10–20 sample courses per dept (CSE101, CSE203, etc).
+- Professors: 20–30 placeholder profiles.
+
+ENV VARS (examples)
+- DATABASE_URL, REDIS_URL
+- RESEND_API_KEY (or MAILGUN)
+- APP_BASE_URL, JWT_SECRET (if you use JWT for magic-link tokens)
+- SESSION_SECRET, NODE_ENV
+- ALLOWED_EMAIL_DOMAIN=iub.edu.bd
+- SENTRY_DSN, POSTHOG_KEY
+
+TESTS / ACCEPTANCE CRITERIA
+- Can sign in only with @iub.edu.bd.
+- Can submit exactly one review per {course, section, semester, professor}; edit only within 24h.
+- Charts render and hide when n<3.
+- Filters & sorting work and are server-backed (no client-only filtering for large sets).
+- Moderation: flagged review remains hidden until approved; report flow works end‑to‑end.
+- Anonymity preserved in UI and API payloads (no PII leaks).
+- Lighthouse mobile performance ≥90; a11y ≥90.
+
+COPY / LEGAL (placeholders to generate)
+- Community Guidelines (no harassment/defamation/doxxing; opinions only; keep it academic).
+- Terms of Use (jurisdiction: Bangladesh; takedown policy; DMCA-like contact).
+- Privacy Policy (what data stored, retention, contact email).
+
+DELIVERABLES
+- Monorepo with frontend+backend packages, Drizzle schema & migrations, seed script.
+- Dockerfile + docker-compose for local dev (db + redis).
+- README with setup, env vars, scripts, and deployment steps.
+- CI pipeline (lint, test, build).
+- Sane defaults + sample data so the app runs out-of-the-box.
+
+OPTIONAL “FUN” EXTRAS (if time)
+- Reviewer badges (e.g., “Course Explorer”, “Helpful Panda”) unlocked by helpful votes.
+- “Most improved professor” leaderboard (uses trend delta).
+- Time-decayed “Hot” tab that boosts recent high-quality reviews.
+- Simple NLP topic chips extracted from comments (“attendance”, “projects”, “slides”).
+
+Please generate the full implementation with the above specs, prioritizing clean code, strict TypeScript, accessibility, great mobile UX, and Bangladesh/IUB context.

@@ -2,14 +2,10 @@ import { Search, User, GraduationCap, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from 'react-router-dom';
-// Temporary: Disable Clerk for now
-// import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/clerk-react';
+import { SignInButton, SignUpButton, UserButton, useUser, SignedIn, SignedOut } from '@clerk/clerk-react';
 
 const Header = () => {
-  // Temporary: Mock auth state
-  const isSignedIn = false;
-  const user = null;
-  // const { isSignedIn, user } = useUser();
+  const { isSignedIn, user } = useUser();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -38,27 +34,25 @@ const Header = () => {
               <Link to="/search">Browse</Link>
             </Button>
             
-            {isSignedIn ? (
-              <>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/write-review">Write Review</Link>
-                </Button>
-                <Button variant="outline" size="sm">
-                  <User className="h-4 w-4 mr-1" />
-                  Profile
-                </Button>
-              </>
-            ) : (
-              <>
+            <SignedIn>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/write-review">Write Review</Link>
+              </Button>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+            <SignedOut>
+              <SignInButton mode="modal">
                 <Button variant="outline" size="sm">
                   <User className="h-4 w-4 mr-1" />
                   Sign In
                 </Button>
+              </SignInButton>
+              <SignUpButton mode="modal">
                 <Button size="sm">
                   Sign Up
                 </Button>
-              </>
-            )}
+              </SignUpButton>
+            </SignedOut>
           </div>
         </div>
         

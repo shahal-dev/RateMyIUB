@@ -9,15 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-// import { SignInButton, useUser } from '@clerk/clerk-react';
+import { SignInButton, useUser } from '@clerk/clerk-react';
 import { useQuery } from '@tanstack/react-query';
 import { CONTROLLED_TAGS } from '@shared/schema';
 
 const WriteReview = () => {
-  // Temporary: Mock auth state
-  const isSignedIn = true; // Set to true to test the form
-  const user = { getToken: () => Promise.resolve('mock-token') };
-  // const { isSignedIn, user } = useUser();
+  const { isSignedIn, user } = useUser();
   const [ratings, setRatings] = useState({
     overall: 0,
     clarity: 0,
@@ -73,7 +70,9 @@ const WriteReview = () => {
             <p className="text-muted-foreground mb-4">
               You need to sign in with your IUB email to write a review.
             </p>
-            <Button>Sign In to Continue</Button>
+            <SignInButton mode="modal">
+              <Button>Sign In to Continue</Button>
+            </SignInButton>
           </CardContent>
         </Card>
       </div>

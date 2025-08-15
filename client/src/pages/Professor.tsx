@@ -1,63 +1,60 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Star, Users, TrendingUp, Calendar, BookOpen, Award } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery } from '@tanstack/react-query';
 import RatingDisplay from "@/components/RatingDisplay";
 
 const Professor = () => {
   const { id } = useParams();
 
-  // Mock data - in real app, fetch based on ID
-  const professor = {
-    name: "Dr. Sarah Rahman",
-    department: "Computer Science & Engineering",
-    email: "sarah.rahman@iub.edu.bd",
-    verified: true,
-    totalReviews: 156,
-    overallRating: 4.8,
-    wouldTakeAgain: 0.94,
-    courses: [
-      { code: "CSE101", name: "Programming Fundamentals", semester: "Spring 2025" },
-      { code: "CSE203", name: "Data Structures", semester: "Fall 2024" },
-      { code: "CSE305", name: "Database Systems", semester: "Spring 2024" }
-    ],
-    tags: ["Clear Explanation", "Engaging", "Fair Grading", "Helpful", "Organized"],
-    ratings: {
-      clarity: 4.7,
-      engagement: 4.9,
-      fairness: 4.6,
-      grading: 4.8,
-      workload: 3.2,
-      difficulty: 3.8
-    }
-  };
-
-  const reviews = [
-    {
-      id: 1,
-      course: "CSE101",
-      semester: "Fall 2024",
-      overall: 5,
-      wouldTakeAgain: true,
-      comment: "Excellent professor! Made programming concepts very clear and accessible.",
-      tags: ["Clear Explanation", "Engaging"],
-      helpful: 23,
-      grade: "A"
+  const { data: professor, isLoading: professorLoading } = useQuery({
+    queryKey: ['professor', id],
+    queryFn: async () => {
+      const response = await fetch(`/api/professors/${id}`);
+      if (!response.ok) throw new Error('Professor not found');
+      return response.json();
     },
-    {
-      id: 2,
-      course: "CSE203",
-      semester: "Spring 2024",
-      overall: 4,
-      wouldTakeAgain: true,
-      comment: "Good teacher, but the workload can be heavy. Worth it for the learning.",
-      tags: ["Fair Grading", "Heavy Projects"],
-      helpful: 15,
-      grade: "B"
-    }
-  ];
+  });
+
+  const { data: reviews = [], isLoading: reviewsLoading } = useQuery({
+    queryKey: ['reviews', 'professor', id],
+    queryFn: async () => {
+      const response = await fetch(`/api/reviews?professorId=${id}`);
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  if (professorLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <div className="animate-pulse">
+          <div className="h-32 bg-muted rounded-lg mb-4"></div>
+          <div className="h-64 bg-muted rounded-lg mb-4"></div>
+          <div className="h-96 bg-muted rounded-lg"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!professor) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <h2 className="text-xl font-semibold mb-2">Professor Not Found</h2>
+            <p className="text-muted-foreground mb-4">The professor you're looking for doesn't exist.</p>
+            <Button asChild>
+              <Link to="/">Go Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
@@ -67,23 +64,23 @@ const Professor = () => {
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <CardTitle className="text-2xl">{professor.name}</CardTitle>
-                {professor.verified && (
+                <CardTitle className="text-2xl">{professor.fullName}</CardTitle>
+                {professor.claimedByUserId && (
                   <Badge variant="default" className="bg-primary/10 text-primary">
                     <Award className="h-3 w-3 mr-1" />
                     Verified
                   </Badge>
                 )}
               </div>
-              <p className="text-muted-foreground">{professor.department}</p>
-              <p className="text-sm text-muted-foreground">{professor.email}</p>
+              <p className="text-muted-foreground">{professor.departments?.join(', ')}</p>
+              {professor.bio && <p className="text-sm text-muted-foreground mt-2">{professor.bio}</p>}
             </div>
             <div className="text-right">
               <div className="flex items-center gap-1 mb-1">
                 <Star className="h-5 w-5 fill-primary text-primary" />
-                <span className="text-2xl font-bold">{professor.overallRating}</span>
+                <span className="text-2xl font-bold">{professor.averageRating?.toFixed(1) || 'N/A'}</span>
               </div>
-              <p className="text-sm text-muted-foreground">{professor.totalReviews} reviews</p>
+              <p className="text-sm text-muted-foreground">{professor.totalReviews || 0} reviews</p>
             </div>
           </div>
         </CardHeader>
@@ -98,79 +95,28 @@ const Professor = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <RatingDisplay 
-            overall={professor.overallRating}
-            totalReviews={professor.totalReviews}
-            wouldTakeAgain={professor.wouldTakeAgain}
-            size="lg"
-          />
-          
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.clarity}</div>
-              <div className="text-sm text-muted-foreground">Clarity</div>
+              <div className="text-2xl font-bold text-primary">{professor.averageRating?.toFixed(1) || 'N/A'}</div>
+              <div className="text-sm text-muted-foreground">Overall</div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.engagement}</div>
-              <div className="text-sm text-muted-foreground">Engagement</div>
+              <div className="text-2xl font-bold text-primary">{Math.round(professor.wouldTakeAgainPercent || 0)}%</div>
+              <div className="text-sm text-muted-foreground">Would Take Again</div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.fairness}</div>
-              <div className="text-sm text-muted-foreground">Fairness</div>
+              <div className="text-2xl font-bold text-primary">{professor.totalReviews || 0}</div>
+              <div className="text-sm text-muted-foreground">Total Reviews</div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.grading}</div>
-              <div className="text-sm text-muted-foreground">Grading</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.workload}</div>
-              <div className="text-sm text-muted-foreground">Workload</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-semibold">{professor.ratings.difficulty}</div>
-              <div className="text-sm text-muted-foreground">Difficulty</div>
+              <div className="text-2xl font-bold text-primary">{Math.round(professor.recommendPercent || 0)}%</div>
+              <div className="text-sm text-muted-foreground">Recommend</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Courses & Tags */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Courses Taught
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {professor.courses.map((course, index) => (
-              <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                <div>
-                  <div className="font-medium">{course.code}</div>
-                  <div className="text-sm text-muted-foreground">{course.name}</div>
-                </div>
-                <Badge variant="outline">{course.semester}</Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Common Tags</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {professor.tags.map((tag) => (
-                <Badge key={tag} variant="secondary">{tag}</Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Reviews Section */}
+      {/* Reviews */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -178,49 +124,122 @@ const Professor = () => {
               <Users className="h-5 w-5" />
               Student Reviews
             </CardTitle>
-            <Button>Write a Review</Button>
+            <Button asChild>
+              <Link to="/write-review">Write Review</Link>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="all" className="w-full">
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="all">All Reviews</TabsTrigger>
-              <TabsTrigger value="recent">Most Recent</TabsTrigger>
+              <TabsTrigger value="recent">Recent</TabsTrigger>
               <TabsTrigger value="helpful">Most Helpful</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="all" className="space-y-4 mt-6">
-              {reviews.map((review) => (
-                <Card key={review.id} className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline">{review.course}</Badge>
-                        <Badge variant="secondary">{review.semester}</Badge>
-                        <Badge variant="outline">Grade: {review.grade}</Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-primary text-primary" />
-                        <span className="font-medium">{review.overall}.0</span>
-                        <span className="text-sm text-muted-foreground ml-2">
-                          Would take again: {review.wouldTakeAgain ? "Yes" : "No"}
-                        </span>
-                      </div>
+            <TabsContent value="all" className="space-y-4">
+              {reviewsLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-32 bg-muted rounded-lg"></div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      👍 {review.helpful}
+                  ))}
+                </div>
+              ) : reviews.length > 0 ? (
+                reviews.map((review: any) => (
+                  <Card key={review.id}>
+                    <CardContent className="pt-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">{review.courseCode}</span>
+                            <span className="text-sm text-muted-foreground">•</span>
+                            <span className="text-sm text-muted-foreground">{review.semester} {review.year}</span>
+                            {review.gradeReceived && (
+                              <>
+                                <span className="text-sm text-muted-foreground">•</span>
+                                <span className="text-sm text-muted-foreground">Grade: {review.gradeReceived}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mb-2">
+                            <RatingDisplay rating={review.overall} size="sm" />
+                            <span className="text-sm font-medium">{review.overall}/5</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {review.wouldTakeAgain !== null && (
+                            <div className="text-sm text-muted-foreground mb-1">
+                              Would take again: {review.wouldTakeAgain ? "Yes" : "No"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {review.comment && <p className="text-sm mb-3">{review.comment}</p>}
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1">
+                          {review.tags?.map((tag: string) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <button className="hover:text-foreground">
+                            👍 {review.helpfulCount || 0}
+                          </button>
+                          <button className="hover:text-foreground">
+                            👎 {review.notHelpfulCount || 0}
+                          </button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-muted-foreground">No reviews yet for this professor.</p>
+                    <Button className="mt-4" asChild>
+                      <Link to="/write-review">Write the First Review</Link>
                     </Button>
-                  </div>
-                  
-                  <p className="text-sm mb-3">{review.comment}</p>
-                  
-                  <div className="flex flex-wrap gap-1">
-                    {review.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                    ))}
-                  </div>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="recent" className="space-y-4">
+              {reviews.slice(0, 5).map((review: any) => (
+                <Card key={review.id}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RatingDisplay rating={review.overall} size="sm" />
+                      <span className="text-sm font-medium">{review.overall}/5</span>
+                      <span className="text-sm text-muted-foreground">• {review.semester} {review.year}</span>
+                    </div>
+                    {review.comment && <p className="text-sm">{review.comment}</p>}
+                  </CardContent>
                 </Card>
               ))}
+            </TabsContent>
+
+            <TabsContent value="helpful" className="space-y-4">
+              {reviews
+                .sort((a: any, b: any) => (b.helpfulCount || 0) - (a.helpfulCount || 0))
+                .slice(0, 5)
+                .map((review: any) => (
+                  <Card key={review.id}>
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <RatingDisplay rating={review.overall} size="sm" />
+                        <span className="text-sm font-medium">{review.overall}/5</span>
+                        <span className="text-sm text-muted-foreground">• {review.helpfulCount || 0} helpful</span>
+                      </div>
+                      {review.comment && <p className="text-sm">{review.comment}</p>}
+                    </CardContent>
+                  </Card>
+                ))}
             </TabsContent>
           </Tabs>
         </CardContent>

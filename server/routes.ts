@@ -1,7 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { clerkClient, verifyToken } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
 import type { Request, Response } from 'express';
 
 // Extend Request type to include auth

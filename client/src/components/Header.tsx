@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { SignInButton, SignUpButton, UserButton, useUser, SignedIn, SignedOut } from '@clerk/clerk-react';
 
 const Header = () => {
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn, user, isLoaded } = useUser();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -34,25 +34,29 @@ const Header = () => {
               <Link to="/search">Browse</Link>
             </Button>
             
-            <SignedIn>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/write-review">Write Review</Link>
-              </Button>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <Button variant="outline" size="sm">
-                  <User className="h-4 w-4 mr-1" />
-                  Sign In
+            {/* Show authentication buttons with fallback */}
+            {isLoaded && isSignedIn ? (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/write-review">Write Review</Link>
                 </Button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <Button size="sm">
-                  Sign Up
-                </Button>
-              </SignUpButton>
-            </SignedOut>
+                <UserButton afterSignOutUrl="/" />
+              </>
+            ) : (
+              <>
+                <SignInButton mode="modal">
+                  <Button variant="outline" size="sm">
+                    <User className="h-4 w-4 mr-1" />
+                    Sign In
+                  </Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button size="sm">
+                    Sign Up
+                  </Button>
+                </SignUpButton>
+              </>
+            )}
           </div>
         </div>
         

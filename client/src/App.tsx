@@ -23,8 +23,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <ClerkProvider 
     publishableKey={clerkPubKey}
-    afterSignInUrl="/"
-    afterSignUpUrl="/"
+    fallbackRedirectUrl="/"
   >
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

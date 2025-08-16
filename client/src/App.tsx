@@ -10,6 +10,7 @@ import Course from "./pages/Course";
 import Department from "./pages/Department";
 import SearchResults from "./pages/SearchResults";
 import WriteReview from "./pages/WriteReview";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -23,7 +24,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <ClerkProvider 
     publishableKey={clerkPubKey}
-    fallbackRedirectUrl="/"
+    signInFallbackRedirectUrl="/"
   >
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/department/:id" element={<Department />} />
             <Route path="/search" element={<SearchResults />} />
             <Route path="/write-review" element={<WriteReview />} />
+            <Route path="/admin" element={<Admin />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

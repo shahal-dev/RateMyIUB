@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SignInButton, useUser } from '@clerk/clerk-react';
+import { SignInButton, useUser, useAuth } from '@clerk/clerk-react';
 import { useQuery } from '@tanstack/react-query';
 import { CONTROLLED_TAGS } from '@shared/schema';
 
 const WriteReview = () => {
   const { isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
   const [ratings, setRatings] = useState({
     overall: 0,
     clarity: 0,
@@ -128,7 +129,7 @@ const WriteReview = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user?.getToken()}`,
+          'Authorization': `Bearer ${await getToken()}`,
         },
         body: JSON.stringify({
           professorId: selectedProfessor,

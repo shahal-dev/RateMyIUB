@@ -2,8 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { createClerkClient, verifyToken } from '@clerk/backend';
+import { facultyScraperService } from "./services/facultyScraper";
 
-const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
+if (!process.env.CLERK_SECRET_KEY) {
+  throw new Error("CLERK_SECRET_KEY must be set. Did you forget to add it to your environment variables?");
+}
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 import type { Request, Response } from 'express';
 
 // Extend Request type to include auth
@@ -23,7 +28,7 @@ const requireAuth = async (req: AuthRequest, res: Response, next: Function) => {
     }
 
     const decoded = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY!,
+      secretKey: process.env.CLERK_SECRET_KEY,
     });
 
     req.auth = {
@@ -271,6 +276,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error seeding data:', error);
       res.status(500).json({ error: 'Failed to seed data' });
+    }
+  });
+
+  // Faculty scraping and sync endpoints
+  app.post('/api/faculty/sync', async (req: Request, res: Response) => {
+    try {
+      console.log('Starting faculty sync from IUB website...');
+      
+      // Scrape faculty data from IUB website
+      const facultyData = await facultyScraperService.scrapeFaculty();
+      
+      if (facultyData.length === 0) {
+        return res.status(404).json({ 
+          error: 'No faculty data could be scraped from IUB website',
+          message: 'The website structure may have changed or the site may be unavailable'
+        });
+      }
+
+      let syncStats = {
+        total: facultyData.length,
+        created: 0,
+        updated: 0,
+        errors: 0,
+        errorDetails: [] as string[]
+      };
+
+      // Process each faculty member
+      for (const faculty of facultyData) {
+        try {
+          // Create a slug from the name
+          const slug = faculty.name
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim();
+
+          // Check if professor already exists by name or slug
+          const existingProfessor = await storage.getProfessorBySlug(slug);
+          
+          if (existingProfessor) {
+            // Update existing professor with new information
+            await storage.updateProfessor(existingProfessor.id, {
+              fullName: faculty.name,
+              bio: faculty.bio || existingProfessor.bio,
+              // You can add more fields here as needed
+            });
+            syncStats.updated++;
+          } else {
+            // Create new professor
+            await storage.createProfessor({
+              fullName: faculty.name,
+              slug: slug,
+              departments: faculty.department ? [faculty.department] : [],
+              bio: faculty.bio || `${faculty.title || 'Faculty'} at ${faculty.department || 'IUB'}${faculty.school ? `, ${faculty.school}` : ''}`,
+            });
+            syncStats.created++;
+          }
+        } catch (error) {
+          console.error(`Error processing faculty member ${faculty.name}:`, error);
+          syncStats.errors++;
+          syncStats.errorDetails.push(`${faculty.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      res.json({
+        message: 'Faculty sync completed',
+        stats: syncStats,
+        sampleData: facultyData.slice(0, 3) // Show first 3 for debugging
+      });
+
+    } catch (error) {
+      console.error('Error syncing faculty:', error);
+      res.status(500).json({ 
+        error: 'Failed to sync faculty data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get scraped faculty data without saving (for testing)
+  app.get('/api/faculty/preview', async (req: Request, res: Response) => {
+    try {
+      console.log('Previewing faculty data from IUB website...');
+      const facultyData = await facultyScraperService.scrapeFaculty();
+      
+      res.json({
+        count: facultyData.length,
+        data: facultyData
+      });
+    } catch (error) {
+      console.error('Error previewing faculty data:', error);
+      res.status(500).json({ 
+        error: 'Failed to preview faculty data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Auto-sync faculty data (can be called by cron job)
+  app.post('/api/faculty/auto-sync', async (req: Request, res: Response) => {
+    try {
+      // Check when last sync was performed (you can store this in database)
+      const lastSyncKey = 'faculty_last_sync';
+      
+      // For now, we'll just perform the sync
+      // In production, you might want to check if enough time has passed
+      
+      console.log('Auto-syncing faculty data...');
+      const facultyData = await facultyScraperService.scrapeFaculty();
+      
+      let newFacultyCount = 0;
+      
+      for (const faculty of facultyData) {
+        const slug = faculty.name
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .trim();
+
+        const existingProfessor = await storage.getProfessorBySlug(slug);
+        
+        if (!existingProfessor) {
+          await storage.createProfessor({
+            fullName: faculty.name,
+            slug: slug,
+            departments: faculty.department ? [faculty.department] : [],
+            bio: faculty.bio || `${faculty.title || 'Faculty'} at ${faculty.department || 'IUB'}`,
+          });
+          newFacultyCount++;
+        }
+      }
+
+      res.json({
+        message: 'Auto-sync completed',
+        newFacultyAdded: newFacultyCount,
+        totalScraped: facultyData.length
+      });
+
+    } catch (error) {
+      console.error('Error in auto-sync:', error);
+      res.status(500).json({ 
+        error: 'Auto-sync failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

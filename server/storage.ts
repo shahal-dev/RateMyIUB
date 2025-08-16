@@ -1,5 +1,3 @@
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
 import { eq, and, desc, asc, sql, count } from 'drizzle-orm';
 import {
   users,
@@ -23,9 +21,7 @@ import {
   type ReviewVote,
   type InsertReviewVote,
 } from '@shared/schema';
-
-const client = neon(process.env.DATABASE_URL!);
-const db = drizzle(client);
+import { db } from './db';
 
 export interface IStorage {
   // Users
@@ -51,6 +47,7 @@ export interface IStorage {
   getProfessor(id: string): Promise<Professor | undefined>;
   getProfessorBySlug(slug: string): Promise<Professor | undefined>;
   createProfessor(professor: InsertProfessor): Promise<Professor>;
+  updateProfessor(id: string, updates: Partial<InsertProfessor>): Promise<Professor | undefined>;
 
   // Reviews
   getReviews(filters?: {
@@ -102,7 +99,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const result = await db.insert(users).values([user]).returning();
+    const result = await db.insert(users).values(user as any).returning();
     return result[0];
   }
 
@@ -110,7 +107,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.update(users).set({
       ...updates,
       updatedAt: new Date()
-    }).where(eq(users.id, id)).returning();
+    } as any).where(eq(users.id, id)).returning();
     return result[0];
   }
 
@@ -125,7 +122,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDepartment(department: InsertDepartment): Promise<Department> {
-    const result = await db.insert(departments).values([department]).returning();
+    const result = await db.insert(departments).values(department).returning();
     return result[0];
   }
 
@@ -139,13 +136,14 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (filters?.query) {
+      const searchPattern = `%${filters.query}%`;
       conditions.push(
-        sql`${courses.code} ILIKE ${'%' + filters.query + '%'} OR ${courses.titleEn} ILIKE ${'%' + filters.query + '%'}`
+        sql`${courses.code} ILIKE ${searchPattern} OR ${courses.titleEn} ILIKE ${searchPattern}`
       );
     }
     
     if (conditions.length > 0) {
-      baseQuery = baseQuery.where(and(...conditions));
+      baseQuery = baseQuery.where(and(...conditions)) as any;
     }
     
     return await baseQuery.orderBy(asc(courses.code));
@@ -162,18 +160,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCourse(course: InsertCourse): Promise<Course> {
-    const result = await db.insert(courses).values([course]).returning();
+    const result = await db.insert(courses).values(course).returning();
     return result[0];
   }
 
   // Professors
   async getProfessors(filters?: { departmentId?: string; query?: string }): Promise<Professor[]> {
     let baseQuery = db.select().from(professors);
+    const conditions = [];
+    
+    if (filters?.departmentId) {
+      // Filter by department ID in the JSONB array
+      conditions.push(sql`${professors.departments} @> ${JSON.stringify([filters.departmentId])}`);
+    }
     
     if (filters?.query) {
-      baseQuery = baseQuery.where(
-        sql`${professors.fullName} ILIKE ${'%' + filters.query + '%'}`
+      const searchPattern = `%${filters.query}%`;
+      conditions.push(
+        sql`${professors.fullName} ILIKE ${searchPattern}`
       );
+    }
+    
+    if (conditions.length > 0) {
+      baseQuery = baseQuery.where(and(...conditions)) as any;
     }
     
     return await baseQuery.orderBy(asc(professors.fullName));
@@ -190,7 +199,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProfessor(professor: InsertProfessor): Promise<Professor> {
-    const result = await db.insert(professors).values([professor]).returning();
+    const result = await db.insert(professors).values(professor).returning();
+    return result[0];
+  }
+
+  async updateProfessor(id: string, updates: Partial<InsertProfessor>): Promise<Professor | undefined> {
+    const result = await db.update(professors).set(updates as any).where(eq(professors.id, id)).returning();
     return result[0];
   }
 
@@ -224,24 +238,24 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (filters?.status) {
-      conditions.push(sql`${reviews.status} = ${filters.status}`);
+      conditions.push(eq(reviews.status, filters.status as any));
     } else {
       // Default to published reviews only
-      conditions.push(sql`${reviews.status} = 'published'`);
+      conditions.push(eq(reviews.status, 'published'));
     }
     
     if (conditions.length > 0) {
-      baseQuery = baseQuery.where(and(...conditions));
+      baseQuery = baseQuery.where(and(...conditions)) as any;
     }
     
-    baseQuery = baseQuery.orderBy(desc(reviews.createdAt));
+    baseQuery = baseQuery.orderBy(desc(reviews.createdAt)) as any;
     
     if (filters?.limit) {
-      baseQuery = baseQuery.limit(filters.limit);
+      baseQuery = baseQuery.limit(filters.limit) as any;
     }
     
     if (filters?.offset) {
-      baseQuery = baseQuery.offset(filters.offset);
+      baseQuery = baseQuery.offset(filters.offset) as any;
     }
     
     return await baseQuery;
@@ -253,7 +267,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createReview(review: InsertReview): Promise<Review> {
-    const result = await db.insert(reviews).values([review]).returning();
+    const result = await db.insert(reviews).values(review as any).returning();
     return result[0];
   }
 
@@ -261,7 +275,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.update(reviews).set({
       ...updates,
       updatedAt: new Date()
-    }).where(eq(reviews.id, id)).returning();
+    } as any).where(eq(reviews.id, id)).returning();
     return result[0];
   }
 
@@ -269,10 +283,10 @@ export class DatabaseStorage implements IStorage {
   async voteReview(vote: InsertReviewVote): Promise<ReviewVote> {
     // Upsert the vote
     const result = await db.insert(reviewVotes)
-      .values([vote])
+      .values(vote as any)
       .onConflictDoUpdate({
         target: [reviewVotes.userId, reviewVotes.reviewId],
-        set: { vote: sql`${vote.vote}` }
+        set: { vote: vote.vote } as any
       })
       .returning();
     return result[0];

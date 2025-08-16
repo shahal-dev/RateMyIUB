@@ -2,8 +2,9 @@ import { Star, Users, ThumbsUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
 interface RatingDisplayProps {
-  overall: number;
-  totalReviews: number;
+  overall?: number;
+  rating?: number;
+  totalReviews?: number;
   wouldTakeAgain?: number;
   recommend?: number;
   size?: "sm" | "md" | "lg";
@@ -11,11 +12,14 @@ interface RatingDisplayProps {
 
 const RatingDisplay = ({ 
   overall, 
-  totalReviews, 
+  rating,
+  totalReviews = 0, 
   wouldTakeAgain, 
   recommend, 
   size = "md" 
 }: RatingDisplayProps) => {
+  // Use rating prop if overall is not provided (for backward compatibility)
+  const displayRating = overall ?? rating ?? 0;
   const sizeClasses = {
     sm: "text-lg",
     md: "text-2xl",
@@ -37,18 +41,18 @@ const RatingDisplay = ({
   return (
     <div className="space-y-4">
       {/* Overall Rating */}
-      <Card className={`p-4 ${getRatingBg(overall)} border-none`}>
+      <Card className={`p-4 ${getRatingBg(displayRating)} border-none`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className={`font-bold ${getRatingColor(overall)} ${sizeClasses[size]}`}>
-              {overall.toFixed(1)}
+            <div className={`font-bold ${getRatingColor(displayRating)} ${sizeClasses[size]}`}>
+              {displayRating.toFixed(1)}
             </div>
             <div className="flex">
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star
                   key={star}
                   className={`h-5 w-5 ${
-                    star <= overall
+                    star <= displayRating
                       ? "fill-current text-accent"
                       : "text-muted-foreground"
                   }`}

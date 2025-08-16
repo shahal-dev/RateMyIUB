@@ -40,6 +40,9 @@ const Header = () => {
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/write-review">Write Review</Link>
                 </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/admin">Admin</Link>
+                </Button>
                 <UserButton afterSignOutUrl="/" />
               </>
             ) : (
